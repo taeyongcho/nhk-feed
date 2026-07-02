@@ -22,14 +22,16 @@ jobs:
           python-version: "3.12"
 
       - name: Install deps
-        run: pip install requests beautifulsoup4
+        run: pip install requests
 
-      - name: Fetch NHK Easy
-        run: python fetch_nhk.py
+      - name: Generate AI easy-Japanese news feed
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python ai_news_feed.py
 
       - name: Commit & push if changed
         run: |
-          git config user.name "nhk-feed-bot"
+          git config user.name "news-feed-bot"
           git config user.email "actions@users.noreply.github.com"
           git add nhk-easy.json
           git diff --cached --quiet || git commit -m "feed update $(date -u +%Y-%m-%d_%H:%M)"
