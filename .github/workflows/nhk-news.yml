@@ -37,7 +37,8 @@ jobs:
         run: |
           git config user.name "news-feed-bot"
           git config user.email "actions@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
           git add nhk-easy.json
           git diff --cached --quiet || git commit -m "feed update $(date -u +%Y-%m-%d_%H:%M)"
-          git pull --rebase origin main
-          git push
+          git push origin main
