@@ -27,7 +27,7 @@ jobs:
       - name: Generate AI easy-Japanese news feed
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python ai_news_feed.py
+        run: python rss_news_feed.py
 
       - name: Commit & push if changed
         run: |
