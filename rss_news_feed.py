@@ -65,12 +65,44 @@ def fetch_headlines():
     return out[:20]
 
 
+def _escape_ctrl_in_strings(t):
+    """JSON 문자열 리터럴 내부의 생(raw) 줄바꿈·탭 등을 이스케이프해 복구."""
+    out, in_str, esc = [], False, False
+    for ch in t:
+        if in_str:
+            if esc:
+                out.append(ch); esc = False; continue
+            if ch == "\\":
+                out.append(ch); esc = True; continue
+            if ch == '"':
+                out.append(ch); in_str = False; continue
+            if ch == "\n":
+                out.append("\\n"); continue
+            if ch == "\r":
+                out.append("\\r"); continue
+            if ch == "\t":
+                out.append("\\t"); continue
+            out.append(ch)
+        else:
+            if ch == '"':
+                in_str = True
+            out.append(ch)
+    return "".join(out)
+
+
 def parse_json_lenient(text):
     t = re.sub(r"```(json)?", "", text).strip()
     s, e = t.find("{"), t.rfind("}")
     if s >= 0 and e > s:
         t = t[s:e + 1]
-    return json.loads(t)
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        pass
+    # 복구: 문자열 내부 생제어문자 이스케이프 + 후행 콤마 제거 후 재시도
+    repaired = _escape_ctrl_in_strings(t)
+    repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
+    return json.loads(repaired)
 
 
 def call_claude(api_key, headlines):
@@ -83,6 +115,7 @@ def call_claude(api_key, headlines):
 기사 원문을 옮기지 말고 JLPT N4~N3 학습자가 읽기 좋은 쉬운 일본어로 완전히 새로 작성하세요:
 - 제목: 쉬운 일본어 한 줄 (원 헤드라인 그대로 복사 금지)
 - 본문: 8~12문장, 쉬운 어휘와 기본 문형 위주
+- 본문 안에서는 큰따옴표(") 대신 「」를 쓰고, 줄바꿈 없이 이어서 작성
 
 아래 JSON만 출력. 코드블록·설명·URL 금지:
 {{"articles":[{{"title":"...","body":"..."}}]}}"""
@@ -121,8 +154,18 @@ def main():
         headlines = ["(RSS 수집 실패 — 오늘 일본 주요 뉴스를 직접 검색해서 고르세요)"]
 
     print("② AI 쉬운 일본어 작성")
-    text = call_claude(api_key, headlines)
-    parsed = parse_json_lenient(text)
+    parsed = None
+    for attempt in range(1, 4):
+        text = call_claude(api_key, headlines)
+        try:
+            parsed = parse_json_lenient(text)
+            break
+        except json.JSONDecodeError as ex:
+            print(f"  ⚠️ JSON 파싱 실패({attempt}/3): {ex}")
+            if attempt < 3:
+                time.sleep(3)
+    if parsed is None:
+        sys.exit("❌ JSON 파싱 3회 실패 — 이번 실행 건너뜀")
 
     today = datetime.now(KST).strftime("%Y-%m-%d")
     stamp = datetime.now(KST).strftime("%H%M")
